@@ -14,6 +14,7 @@ This is a boilerplate for the LINE app that uses ChatGPT's API.
     - API Key
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
 - [SAM CLI](https://aws.amazon.com/serverless/sam/)
+- Docker
 - bash
 
 ## How to Use
