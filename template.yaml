@@ -1,0 +1,251 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM Template for LINE bot
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: !Ref LambdaMemorySize
+    Tracing: Active
+  Api:
+    TracingEnabled: true
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues:
+      - dev
+      - stg
+      - prod
+    Default: dev
+  AppName:
+    Type: String
+  LambdaMemorySize:
+    Type: Number
+  WebhookDockerTag:
+    Type: String
+  ProcessorDockerTag:
+    Type: String
+  RequestKeepSec:
+    Type: Number
+  LineChannelSecret:
+    Type: String
+  LineChannelAccessToken:
+    Type: String
+  OpenaiOrganization:
+    Type: String
+  OpenaiApiKey:
+    Type: String
+  OpenaiModelName:
+    Type: String
+  OpenaiModelMaxTokens:
+    Type: Number
+  OpenaiChatGptSystemMessage:
+    Type: String
+  OpenaiRequestTimeout:
+    Type: Number
+  QuickReply:
+    Type: String
+    Default: ""
+
+Mappings:
+  EnvironmentMap:
+    dev:
+      LoggerLevel: DEBUG
+    stg:
+      LoggerLevel: INFO
+    prod:
+      LoggerLevel: INFO
+
+Resources:
+  DynamoChatGptRequestHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      TableName: !Sub "${AppName}_ChatGptRequestHistoryTable_${Environment}"
+      AttributeDefinitions:
+        - AttributeName: talkRoomId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: requestId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: talkRoomId
+          KeyType: HASH
+        - AttributeName: createdAt
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: !Sub "${AppName}_ChatGptRequestHistoryTable_${Environment}GSI1"
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            NonKeyAttributes:
+              - talkRoomId
+              - requestId
+              - request
+              - response
+            ProjectionType: INCLUDE
+        - IndexName: !Sub "${AppName}_ChatGptRequestHistoryTable_${Environment}GSI2"
+          KeySchema:
+            - AttributeName: requestId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            NonKeyAttributes:
+              - talkRoomId
+              - userId
+              - request
+              - response
+            ProjectionType: INCLUDE
+  DynamoTalkRoomHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      TableName: !Sub "${AppName}_TalkRoomHistoryTable_${Environment}"
+      AttributeDefinitions:
+        - AttributeName: talkRoomId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: talkRoomId
+          KeyType: HASH
+        - AttributeName: createdAt
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: !Sub "${AppName}_TalkRoomHistoryTable_${Environment}GSI1"
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            NonKeyAttributes:
+              - talkRoomId
+              - textMessage
+            ProjectionType: INCLUDE
+
+  LineBotSqsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+
+  LineBotApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      OpenApiVersion: 3.0.2
+      Cors:
+        AllowCredentials: False
+        AllowMethods: "'OPTIONS,POST'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+        MaxAge: "'180'"
+
+  LineBotWebhook:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      FunctionName: !Sub "${AppName}_linebotwebhook_${Environment}"
+      Architectures:
+        - arm64
+      Environment:
+        Variables:
+          LOGGER_LEVEL: !FindInMap [EnvironmentMap, !Ref Environment, LoggerLevel]
+          SQS_QUEUE_URL: !Ref LineBotSqsQueue
+          LINE_CHANNEL_SECRET: !Ref LineChannelSecret
+          LINE_CHANNEL_ACCESS_TOKEN: !Ref LineChannelAccessToken
+      Events:
+        LineBotWebhook:
+          Type: Api
+          Properties:
+            Path: /linebotwebhook
+            Method: post
+            RestApiId: !Ref LineBotApiGatewayApi
+      ImageUri: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${AWS::StackName}/linebotwebhook:${WebhookDockerTag}"
+      Policies:
+        ## Read more about SAM Policy templates at:
+        ## https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt LineBotSqsQueue.QueueName
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./webhook
+      DockerTag: !Ref WebhookDockerTag
+
+  LineBotProcessor:
+    Type: AWS::Serverless::Function 
+    Properties:
+      PackageType: Image
+      FunctionName: !Sub "${AppName}_linebotprocessor_${Environment}"
+      Architectures:
+        - arm64
+      Environment:
+        Variables:
+          REGION: !Ref "AWS::Region"
+          LOGGER_LEVEL: !FindInMap [EnvironmentMap, !Ref Environment, LoggerLevel]
+          SQS_QUEUE_URL: !Ref LineBotSqsQueue
+          DYNAMO_CHAT_GPT_REQUEST_HISTORY_TABLE: !Ref DynamoChatGptRequestHistoryTable
+          DYNAMO_TALK_ROOM_HISTORY_TABLE: !Ref DynamoTalkRoomHistoryTable
+          REQUEST_KEEP_SEC: !Ref RequestKeepSec
+          LINE_CHANNEL_SECRET: !Ref LineChannelSecret
+          LINE_CHANNEL_ACCESS_TOKEN: !Ref LineChannelAccessToken
+          OPENAI_ORGANIZATION: !Ref OpenaiOrganization
+          OPENAI_API_KEY: !Ref OpenaiApiKey
+          OPENAI_MODEL_NAME: !Ref OpenaiModelName
+          OPENAI_MODEL_MAX_TOKENS: !Ref OpenaiModelMaxTokens
+          OPENAPI_CHAT_GPT_SYSTEM_MESSAGE: !Ref OpenaiChatGptSystemMessage
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt LineBotSqsQueue.Arn
+            BatchSize: 10
+      Policies:
+        ## Read more about SAM Policy templates at:
+        ## https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
+        - DynamoDBCrudPolicy:
+            TableName: !Select [1, !Split ['/', !GetAtt DynamoChatGptRequestHistoryTable.Arn]]
+        - DynamoDBCrudPolicy:
+            TableName: !Select [1, !Split ['/', !GetAtt DynamoTalkRoomHistoryTable.Arn]]
+      ImageUri: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${AWS::StackName}/linebotprocessor:${WebhookDockerTag}"
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./processor
+      DockerTag: !Ref ProcessorDockerTag
+
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name:
+        Fn::Join:
+          - ''
+          - - ApplicationInsights-SAM-
+            - Ref: AWS::StackName
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+
+  ApplicationInsightsMonitoring:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName:
+        Fn::Join:
+          - ''
+          - - ApplicationInsights-SAM-
+            - Ref: AWS::StackName
+      AutoConfigurationEnabled: 'true'
+    DependsOn: ApplicationResourceGroup
+
+Outputs:
+  LineBotWebhookUrl:
+    Description: "Webhook URL for LINE Bot"
+    Value: !Sub "https://${LineBotApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/linebotwebhook"
