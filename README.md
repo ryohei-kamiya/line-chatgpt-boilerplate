@@ -24,7 +24,7 @@ This is a boilerplate for the LINE app that uses ChatGPT's API.
     1. AWS_ACCOUNT_ID
     2. AWS_REGION
     3. AWS_PROFILE
-    4. ENVIRONMENT ( Any string. ex. dev or prod )
+    4. ENVIRONMENT ( Arbitrary ASCII code string. ex. dev or prod )
     5. APP_NAME ( Arbitrary ASCII code string )
     6. [LINE_CHANNEL_SECRET](https://developers.line.biz/en/docs/line-things/getting-started/#create-messaging-api-channel)
     7. [LINE_CHANNEL_ACCESS_TOKEN](https://developers.line.biz/en/docs/messaging-api/channel-access-tokens/#long-lived-channel-access-tokens)
