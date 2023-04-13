@@ -19,9 +19,9 @@ def create_response(status_code, body):
         フロントに返却するデータ
     """
     response = {
-        'statusCode': status_code,
-        'headers': {"Access-Control-Allow-Origin": "*"},
-        'body': body
+        "statusCode": status_code,
+        "headers": {"Access-Control-Allow-Origin": "*"},
+        "body": body,
     }
     return response
 
