@@ -38,7 +38,7 @@ class ChatGpt:
             max_tokens = int(os.environ.get("OPENAI_MODEL_MAX_TOKENS", 4096))  # type: ignore
         if not system_message:
             system_message = os.environ.get(
-                "OPENAPI_CHAT_GPT_SYSTEM_MESSAGE", "This is a default system."
+                "OPENAI_CHAT_GPT_SYSTEM_MESSAGE", "This is a default system."
             ).strip("\"'")
         self.model_name = model_name
         self.max_tokens = max_tokens

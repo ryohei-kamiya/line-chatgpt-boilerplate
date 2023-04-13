@@ -50,7 +50,7 @@ class ChatGptTestCase(TestCase):
             {
                 "role": ChatGptRole.SYSTEM.value,
                 "content": os.environ.get(
-                    "OPENAPI_CHAT_GPT_SYSTEM_MESSAGE", "This is a default system."
+                    "OPENAI_CHAT_GPT_SYSTEM_MESSAGE", "This is a default system."
                 ).strip("\"'"),
             },
         )
@@ -84,7 +84,7 @@ class ChatGptTestCase(TestCase):
             {
                 "role": ChatGptRole.SYSTEM.value,
                 "content": os.environ.get(
-                    "OPENAPI_CHAT_GPT_SYSTEM_MESSAGE", "This is a default system."
+                    "OPENAI_CHAT_GPT_SYSTEM_MESSAGE", "This is a default system."
                 ).strip("\"'"),
             },
         )

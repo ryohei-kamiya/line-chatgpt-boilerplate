@@ -205,7 +205,7 @@ Resources:
           OPENAI_API_KEY: !Ref OpenaiApiKey
           OPENAI_MODEL_NAME: !Ref OpenaiModelName
           OPENAI_MODEL_MAX_TOKENS: !Ref OpenaiModelMaxTokens
-          OPENAPI_CHAT_GPT_SYSTEM_MESSAGE: !Ref OpenaiChatGptSystemMessage
+          OPENAI_CHAT_GPT_SYSTEM_MESSAGE: !Ref OpenaiChatGptSystemMessage
           OPENAI_REQUEST_TIMEOUT_ERROR_MESSAGE: !Ref OpenaiRequestTimeoutErrorMessage
       Events:
         SQSEvent:
