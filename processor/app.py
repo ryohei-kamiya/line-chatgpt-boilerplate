@@ -13,8 +13,15 @@ from services.chatgpt import ChatGpt
 LOGGER_LEVEL = os.environ.get("LOGGER_LEVEL", "INFO")
 logger = LoggerFactory.get_logger(__name__, log_level=LOGGER_LEVEL)
 
-# タイムアウト秒数設定
+# タイムアウト秒数/エラーメッセージ設定
 OPENAI_REQUEST_TIMEOUT = float(os.environ.get("OPENAI_REQUEST_TIMEOUT", 10))
+OPENAI_REQUEST_TIMEOUT_ERROR_MESSAGE = (
+    os.environ.get(
+        "OPENAI_REQUEST_TIMEOUT_ERROR_MESSAGE", "The OpenAI API request has timed out."
+    )
+    .strip('"')
+    .replace("\\n", "\n")
+)
 
 
 def is_message_event(event_body) -> bool:
@@ -128,14 +135,14 @@ def process_text_message_event(
             logger.info(chatgpt_request_history.serialize())
 
             return chatgpt_request_history
-    except TimeoutError:
+    except Exception:
         logger.error("Request timed out", exc_info=True)
         # タイムアウトした場合は、タイムアウトエラーメッセージを返す
         chatgpt_request_history = ChatGptRequestHistory.create_instance(
             talk_room_history.talkRoomId,
             talk_room_history.userId,
             chatgpt.get_request(),  # OpenAIのサーバに送信したリクエスト
-            error_message="",
+            error_message=OPENAI_REQUEST_TIMEOUT_ERROR_MESSAGE,
             db_client=talk_room_history.get_db_client(),
         )
         chatgpt_request_history.save()

@@ -7,7 +7,6 @@ from models.model_base import ModelBase, SortKeyComparison
 
 
 class ChatGptRequestHistory(ModelBase):
-
     TABLE = os.getenv(
         "DYNAMO_CHAT_GPT_REQUEST_HISTORY_TABLE", "ChatGptRequestHistoryTable"
     )
@@ -83,7 +82,9 @@ class ChatGptRequestHistory(ModelBase):
                     "userId": user_id,
                     "requestId": request_id,
                     "request": request_str,
-                    "response": {"error_message": error_message},
+                    "response": json.dumps(
+                        {"error_message": error_message}, ensure_ascii=False
+                    ),
                     "createdAt": datetime.datetime.now().isoformat(),
                 },
                 db_client=db_client,
@@ -527,6 +528,8 @@ class ChatGptRequestHistory(ModelBase):
         response = json.loads(self._data["response"])
         if not response:
             return None
+        if response.get("error_message"):
+            return response.get("error_message")
         if not response.get("choices"):
             return None
         if len(response["choices"]) < 1:

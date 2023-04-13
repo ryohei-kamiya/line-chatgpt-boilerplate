@@ -2,7 +2,7 @@ import os
 import openai
 import tiktoken
 from enum import Enum
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 openai.organization = os.environ.get("OPENAI_ORGANIZATION", "").strip("\"'")
 openai.api_key = os.environ.get("OPENAI_API_KEY", "").strip("\"'")
@@ -102,13 +102,18 @@ class ChatGpt:
             if len(self.request) < 2:
                 return False
         if timeout is not None:
-            with ThreadPoolExecutor(max_workers=1) as tpe:
-                feature = tpe.submit(
+            tpe = ThreadPoolExecutor(max_workers=1)
+            try:
+                future = tpe.submit(
                     openai.ChatCompletion.create,
                     model=self.model_name,
                     messages=self.request,
+                    timeout=timeout,
                 )
-                self.response = feature.result(timeout=timeout)
+                self.response = future.result(timeout=timeout)
+            except FutureTimeoutError:
+                tpe.shutdown(wait=False, cancel_futures=True)
+                raise
         else:
             self.response = openai.ChatCompletion.create(
                 model=self.model_name, messages=self.request
